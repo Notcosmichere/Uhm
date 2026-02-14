@@ -2,37 +2,32 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Kurupey Magic - Fail Safe</title>
+    <title>Kurupey Magic - Sharp Star Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui-layer { position: absolute; top: 20px; left: 20px; color: white; z-index: 100; pointer-events: none; }
-        #status-bar { color: #00ffcc; font-family: monospace; background: rgba(0,0,0,0.5); padding: 5px; }
+        #status-bar { color: #00ffcc; font-family: monospace; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; }
         
-        /* The Camera View */
         #debug-box { 
             position: absolute; bottom: 20px; right: 20px; 
-            width: 320px; height: 240px; 
-            border: 2px solid #00ffcc; border-radius: 8px; 
+            width: 280px; height: 210px; 
+            border: 2px solid #00ffcc; border-radius: 12px; 
             overflow: hidden; z-index: 200;
             background: #111;
         }
         #input_video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        #sketch_canvas { 
-            position: absolute; top: 0; left: 0; 
-            width: 100%; height: 100%; 
-            transform: scaleX(-1); /* Mirror to match video */
-        }
+        #sketch_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
         
         #btn-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 300; }
-        button { padding: 20px 50px; font-size: 1.5rem; cursor: pointer; background: #00ffcc; border: none; border-radius: 50px; font-weight: bold; }
+        button { padding: 20px 50px; font-size: 1.5rem; cursor: pointer; background: #00ffcc; border: none; border-radius: 50px; font-weight: bold; box-shadow: 0 0 20px #00ffcc; }
     </style>
 </head>
 <body>
 
 <div id="ui-layer">
-    <h1>Kurupey Cosmic Engine</h1>
+    <h1>Kurupey Cosmic</h1>
     <div id="status-bar">STATUS: SYSTEM READY</div>
-    <p>1. Click Start | 2. Allow Camera | 3. Show Hand</p>
+    <p>3 Fingers: Sharp Star | 4 Fingers: Miss You | Fist: Sphere</p>
 </div>
 
 <div id="btn-container">
@@ -51,137 +46,183 @@
 
 <script>
     const status = document.getElementById('status-bar');
-    const PARTICLE_COUNT = 8000;
+    const PARTICLE_COUNT = 10000;
     let mode = 'scatter';
+    let pulseTime = 0;
 
-    // --- 1. THREE.JS SCENE ---
+    // --- THREE.JS ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    camera.position.z = 40;
+    camera.position.z = 50;
 
     const geometry = new THREE.BufferGeometry();
     const pos = new Float32Array(PARTICLE_COUNT * 3);
     const tar = new Float32Array(PARTICLE_COUNT * 3);
     const col = new Float32Array(PARTICLE_COUNT * 3);
 
-    for(let i=0; i<PARTICLE_COUNT; i++) {
-        tar[i*3] = (Math.random()-0.5)*100;
-        tar[i*3+1] = (Math.random()-0.5)*80;
-        tar[i*3+2] = (Math.random()-0.5)*40;
-        col[i*3]=0.4; col[i*3+1]=0.4; col[i*3+2]=1; 
-    }
-
     geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.25, vertexColors: true, blending: THREE.AdditiveBlending }));
+    const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.2, vertexColors: true, blending: THREE.AdditiveBlending }));
     scene.add(points);
 
-    // --- 2. SHAPE LOGIC ---
-    function updateTargets(shape) {
-        if(shape === 'sphere') {
-            for(let i=0; i<PARTICLE_COUNT; i++) {
-                const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
-                const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-                tar[i*3] = 15 * Math.cos(theta) * Math.sin(phi);
-                tar[i*3+1] = 15 * Math.sin(theta) * Math.sin(phi);
-                tar[i*3+2] = 15 * Math.cos(phi);
-                col[i*3]=0; col[i*3+1]=1; col[i*3+2]=0.5;
-            }
-        } else if (shape === 'star') {
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const angle = (i / PARTICLE_COUNT) * (Math.PI * 2);
-                const r = (i % 2 === 0) ? 22 : 8;
-                const sa = Math.floor(i / (PARTICLE_COUNT/10)) * (Math.PI/5);
-                tar[i*3] = Math.cos(sa - Math.PI/2) * r;
-                tar[i*3+1] = Math.sin(sa - Math.PI/2) * r;
-                tar[i*3+2] = 0;
-                col[i*3]=1; col[i*3+1]=0.8; col[i*3+2]=0;
-            }
-        } else if (shape === 'scatter') {
-            for(let i=0; i<PARTICLE_COUNT; i++) {
-                tar[i*3] = (Math.random()-0.5)*80;
-                tar[i*3+1] = (Math.random()-0.5)*60;
-                tar[i*3+2] = (Math.random()-0.5)*40;
-                col[i*3]=0.4; col[i*3+1]=0.4; col[i*3+2]=1;
+    // --- GENERATORS ---
+    function setScatter() {
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            tar[i*3] = (Math.random()-0.5)*120;
+            tar[i*3+1] = (Math.random()-0.5)*100;
+            tar[i*3+2] = (Math.random()-0.5)*60;
+            col[i*3]=0.3; col[i*3+1]=0.4; col[i*3+2]=1;
+        }
+    }
+
+    function setSphere() {
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+            const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+            tar[i*3] = 18 * Math.cos(theta) * Math.sin(phi);
+            tar[i*3+1] = 18 * Math.sin(theta) * Math.sin(phi);
+            tar[i*3+2] = 18 * Math.cos(phi);
+            col[i*3]=0.1; col[i*3+1]=1; col[i*3+2]=0.6;
+        }
+    }
+
+    function setStar() {
+        const starPoints = [];
+        const outerR = 25;
+        const innerR = 10;
+        
+        // Calculate the 10 vertices of a 5-pointed star
+        for(let i=0; i<10; i++) {
+            const angle = (i * Math.PI) / 5 - (Math.PI / 2);
+            const r = (i % 2 === 0) ? outerR : innerR;
+            starPoints.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+        }
+
+        // Distribute particles along the lines between vertices
+        const particlesPerEdge = Math.floor(PARTICLE_COUNT / 10);
+        for(let i=0; i<10; i++) {
+            const p1 = starPoints[i];
+            const p2 = starPoints[(i + 1) % 10];
+            
+            for(let j=0; j<particlesPerEdge; j++) {
+                const idx = (i * particlesPerEdge + j);
+                if (idx >= PARTICLE_COUNT) break;
+                
+                const t = j / particlesPerEdge;
+                tar[idx*3] = p1.x + (p2.x - p1.x) * t;
+                tar[idx*3+1] = p1.y + (p2.y - p1.y) * t;
+                tar[idx*3+2] = (Math.random()-0.5) * 2;
+                
+                col[idx*3]=1; col[idx*3+1]=0.85; col[idx*3+2]=0; // Gold
             }
         }
     }
 
-    // --- 3. MEDIAPIPE TRACKING ---
+    function setText(line1, line2, showEmoji) {
+        const c = document.createElement('canvas');
+        const x = c.getContext('2d');
+        c.width = 1200; c.height = 400;
+        x.fillStyle = 'white';
+        x.font = 'bold 100px Arial';
+        x.textAlign = 'center';
+        x.fillText(line1, 500, 160);
+        x.fillText(line2, 500, 280);
+        if(showEmoji) x.fillText(":(", 900, 230);
+
+        const imgData = x.getImageData(0,0,1200,400).data;
+        const pts = [];
+        for(let r=0; r<400; r+=4) {
+            for(let cl=0; cl<1200; cl+=4) {
+                if(imgData[(r*1200+cl)*4] > 128) pts.push({x: (cl-600)*0.12, y: (200-r)*0.12});
+            }
+        }
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            const p = pts[i % pts.length];
+            tar[i*3] = p.x; tar[i*3+1] = p.y; tar[i*3+2] = (Math.random()-0.5)*2;
+            if(showEmoji) { col[i*3]=0.4; col[i*3+1]=0.7; col[i*3+2]=1; }
+            else { col[i*3]=1; col[i*3+1]=0.1; col[i*3+2]=0.6; }
+        }
+    }
+
+    // --- TRACKING ---
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('sketch_canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
 
     hands.onResults((results) => {
-        // Clear and resize canvas
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            status.innerText = "STATUS: HAND TRACKED";
+            status.innerText = "STATUS: TRACKING ACTIVE";
             const landmarks = results.multiHandLandmarks[0];
             
-            // Draw skeleton
-            drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FFCC', lineWidth: 5});
-            drawLandmarks(canvasCtx, landmarks, {color: '#FF0055', lineWidth: 2});
+            drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FFCC', lineWidth: 4});
+            drawLandmarks(canvasCtx, landmarks, {color: '#FF0055', radius: 3});
 
-            // Gesture Logic
             const up = [8, 12, 16, 20].filter(id => landmarks[id].y < landmarks[id-2].y).length;
-            const isFist = landmarks[8].y > landmarks[5].y && landmarks[12].y > landmarks[9].y;
+            const fist = landmarks[8].y > landmarks[5].y && landmarks[12].y > landmarks[9].y && landmarks[16].y > landmarks[13].y;
 
-            if (isFist) { if(mode!='sphere'){ mode='sphere'; updateTargets('sphere'); } }
-            else if (up === 3) { if(mode!='star'){ mode='star'; updateTargets('star'); } }
-            else if (up >= 1) { /* Placeholder for text modes */ }
-            else { if(mode!='scatter'){ mode='scatter'; updateTargets('scatter'); } }
+            if (fist) { if(mode!='sphere'){ mode='sphere'; setSphere(); } }
+            else if (up === 2) { if(mode!='love'){ mode='love'; setText("I LOVE YOU", "KURUPEY", false); } }
+            else if (up === 3) { if(mode!='star'){ mode='star'; setStar(); } }
+            else if (up === 4) { if(mode!='miss'){ mode='miss'; setText("MISS YOU", "PONAH", true); } }
+            else { if(mode!='scatter'){ mode='scatter'; setScatter(); } }
         } else {
-            status.innerText = "STATUS: SEARCHING FOR HAND...";
+            status.innerText = "STATUS: SEARCHING...";
+            if(mode!='scatter'){ mode='scatter'; setScatter(); }
         }
         canvasCtx.restore();
     });
 
-    // --- 4. STARTUP ---
+    // --- START ---
     document.getElementById('startBtn').addEventListener('click', () => {
-        status.innerText = "STATUS: INITIALIZING CAMERA...";
-        const cameraUtils = new Camera(videoElement, {
+        const cam = new Camera(videoElement, {
             onFrame: async () => { await hands.send({image: videoElement}); },
             width: 640, height: 480
         });
-        cameraUtils.start().then(() => {
-            status.innerText = "STATUS: CAMERA ACTIVE";
+        cam.start().then(() => {
             document.getElementById('btn-container').style.display = 'none';
-        }).catch(err => {
-            status.innerText = "ERROR: CAMERA BLOCKED";
         });
     });
 
-    // --- 5. ANIMATION LOOP ---
+    // --- LOOP ---
     function animate() {
         requestAnimationFrame(animate);
         const pArr = geometry.attributes.position.array;
         const cArr = geometry.attributes.color.array;
+        
+        pulseTime += 0.04;
+        const pulse = (mode === 'love' || mode === 'miss' || mode === 'star') ? 1.0 + Math.sin(pulseTime)*0.08 : 1.0;
 
         for(let i=0; i<PARTICLE_COUNT*3; i++) {
-            // Apply drift to scatter mode
-            let drift = (mode === 'scatter') ? (Math.random()-0.5)*0.1 : 0;
-            pArr[i] += (tar[i] - pArr[i]) * 0.1 + drift;
+            pArr[i] += (tar[i] * pulse - pArr[i]) * 0.12;
             cArr[i] += (col[i] - cArr[i]) * 0.1;
         }
         
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.color.needsUpdate = true;
         
-        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.01;
+        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.015;
+        else points.rotation.y *= 0.94;
+
         renderer.render(scene, camera);
     }
     animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 </script>
 </body>
 </html>
