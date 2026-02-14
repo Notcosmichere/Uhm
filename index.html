@@ -2,92 +2,195 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Hand Tracking Particles - Fix</title>
+    <title>Kurupey Planetary Particles</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
-        #video_container { position: absolute; bottom: 10px; right: 10px; width: 180px; height: 120px; border: 1px solid #333; transform: scaleX(-1); border-radius: 10px; }
-        canvas { display: block; }
+        #controls { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; }
+        button { padding: 15px 30px; cursor: pointer; background: #00d4ff; color: #000; border: none; border-radius: 30px; font-weight: bold; font-size: 1.2em; box-shadow: 0 0 20px rgba(0,212,255,0.5); }
+        #status { color: #00ff00; margin-top: 10px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
+        .hint { color: #aaa; font-size: 0.8em; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <h2>Particle Controller</h2>
-    <div id="status">Waiting for Camera...</div>
+    <h1>Kurupey Orbit</h1>
+    <div id="status">Ready to Launch</div>
+    <div class="hint">Fist: Spinning Planet | Open: Nebula | Peace: Secret Message</div>
 </div>
+
+<div id="controls">
+    <button id="startButton">INITIALIZE SYSTEM</button>
+</div>
+
 <video id="input_video" style="display:none" playsinline></video>
-<canvas id="video_container"></canvas>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-    const statusText = document.getElementById('status');
-    const PARTICLE_COUNT = 3000;
+    const PARTICLE_COUNT = 8000; // Increased density for a better sphere
+    let mode = 'scatter'; 
+    let rotationSpeed = 0.002;
     
-    // --- Scene Setup ---
+    // --- Three.js Setup ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    camera.position.z = 15;
+    camera.position.z = 25;
 
-    // --- Particles ---
+    // --- Particle Logic ---
     const geometry = new THREE.BufferGeometry();
-    const posArray = new Float32Array(PARTICLE_COUNT * 3);
-    for(let i=0; i<PARTICLE_COUNT*3; i++) posArray[i] = (Math.random() - 0.5) * 20;
-    geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const currentPos = new Float32Array(PARTICLE_COUNT * 3);
+    const targetPos = new Float32Array(PARTICLE_COUNT * 3);
+    const targetCols = new Float32Array(PARTICLE_COUNT * 3);
+    const currentCols = new Float32Array(PARTICLE_COUNT * 3);
+
+    for(let i=0; i<PARTICLE_COUNT; i++) {
+        currentPos[i*3] = (Math.random() - 0.5) * 50;
+        currentPos[i*3+1] = (Math.random() - 0.5) * 50;
+        currentPos[i*3+2] = (Math.random() - 0.5) * 50;
+        
+        targetPos[i*3] = currentPos[i*3];
+        targetPos[i*3+1] = currentPos[i*3+1];
+        targetPos[i*3+2] = currentPos[i*3+2];
+
+        // Default Nebula Colors
+        currentCols[i*3] = 0.2; currentCols[i*3+1] = 0.4; currentCols[i*3+2] = 1.0;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(currentPos, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(currentCols, 3));
     
-    const material = new THREE.PointsMaterial({ size: 0.08, color: 0x00ffff, transparent: true, blending: THREE.AdditiveBlending });
+    const material = new THREE.PointsMaterial({ 
+        size: 0.07, 
+        vertexColors: true, 
+        transparent: true, 
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending 
+    });
     const points = new THREE.Points(geometry, material);
     scene.add(points);
 
+    // --- Morphing Functions ---
+    function setPlanetSphere() {
+        rotationSpeed = 0.02; // Spin faster
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+            const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+            targetPos[i*3] = 10 * Math.cos(theta) * Math.sin(phi);
+            targetPos[i*3+1] = 10 * Math.sin(theta) * Math.sin(phi);
+            targetPos[i*3+2] = 10 * Math.cos(phi);
+
+            // Planetary Gradient (Green and Blue)
+            targetCols[i*3] = Math.random() > 0.5 ? 0.1 : 0.2; // R
+            targetCols[i*3+1] = Math.random() > 0.5 ? 0.8 : 0.3; // G
+            targetCols[i*3+2] = Math.random() > 0.5 ? 0.4 : 0.9; // B
+        }
+    }
+
+    function setScatter() {
+        rotationSpeed = 0.002;
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            targetPos[i*3] = (Math.random() - 0.5) * 40;
+            targetPos[i*3+1] = (Math.random() - 0.5) * 40;
+            targetPos[i*3+2] = (Math.random() - 0.5) * 40;
+            
+            targetCols[i*3] = 0.5; targetCols[i*3+1] = 0.7; targetCols[i*3+2] = 1.0;
+        }
+    }
+
+    function setMessage() {
+        rotationSpeed = 0.001;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800; canvas.height = 200;
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 60px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('I LOVE YOU', 400, 70);
+        ctx.fillText('KURUPEY', 400, 150);
+        
+        const imgData = ctx.getImageData(0, 0, 800, 200).data;
+        const pts = [];
+        for(let y=0; y<200; y+=3) {
+            for(let x=0; x<800; x+=3) {
+                if(imgData[(y*800+x)*4] > 128) pts.push({x: (x-400)*0.07, y: (100-y)*0.07});
+            }
+        }
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            const p = pts[i % pts.length];
+            targetPos[i*3] = p.x;
+            targetPos[i*3+1] = p.y;
+            targetPos[i*3+2] = (Math.random() - 0.5) * 2;
+            
+            targetCols[i*3] = 1.0; targetCols[i*3+1] = 0.2; targetCols[i*3+2] = 0.6; // Magenta
+        }
+    }
+
     // --- Hand Tracking ---
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
-
-    let targetX = 0, targetY = 0;
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
 
     hands.onResults((results) => {
-        statusText.innerText = "Tracking Active!";
+        document.getElementById('status').innerText = "Tracking Hand...";
         if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
-            const p = results.multiHandLandmarks[0][9];
-            targetX = (p.x - 0.5) * -30;
-            targetY = (p.y - 0.5) * -20;
+            const lm = results.multiHandLandmarks[0];
+            const isIndexUp = lm[8].y < lm[6].y;
+            const isMiddleUp = lm[12].y < lm[10].y;
+            const isRingDown = lm[16].y > lm[14].y;
+
+            if (isIndexUp && isMiddleUp && isRingDown) {
+                if(mode !== 'text') { mode = 'text'; setMessage(); }
+            } else if (lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[4].x > lm[2].x) {
+                // Fist detection
+                if(mode !== 'planet') { mode = 'planet'; setPlanetSphere(); }
+            } else {
+                if(mode !== 'scatter') { mode = 'scatter'; setScatter(); }
+            }
         }
     });
 
-    const videoElement = document.getElementById('input_video');
-    const cam = new Camera(videoElement, {
-        onFrame: async () => { await hands.send({image: videoElement}); },
-        width: 640, height: 480
-    });
-    
-    // Attempt to start
-    cam.start().catch(err => {
-        statusText.innerText = "Error: Camera access denied or blocked by browser.";
-        console.error(err);
+    // --- Controller ---
+    document.getElementById('startButton').addEventListener('click', () => {
+        const videoElement = document.getElementById('input_video');
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cam.start();
+        document.getElementById('controls').style.display = 'none';
     });
 
-    // --- Animation ---
     function animate() {
         requestAnimationFrame(animate);
+        const pos = geometry.attributes.position.array;
+        const col = geometry.attributes.color.array;
         
-        const positions = geometry.attributes.position.array;
-        for(let i = 0; i < PARTICLE_COUNT; i++) {
-            const i3 = i * 3;
-            // Particles gravitate toward hand
-            positions[i3] += (targetX - positions[i3]) * 0.01 + (Math.random()-0.5)*0.1;
-            positions[i3+1] += (targetY - positions[i3+1]) * 0.01 + (Math.random()-0.5)*0.1;
+        for(let i=0; i<PARTICLE_COUNT*3; i++) {
+            pos[i] += (targetPos[i] - pos[i]) * 0.08;
+            col[i] += (targetCols[i] - col[i]) * 0.05; // Smooth color transition
         }
+        
         geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.color.needsUpdate = true;
+        
+        // Dynamic Rotation
+        points.rotation.y += rotationSpeed;
         
         renderer.render(scene, camera);
     }
     animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 </script>
 </body>
 </html>
