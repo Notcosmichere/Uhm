@@ -2,26 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Kurupey Planetary Particles</title>
+    <title>Kurupey Magic - Falling Tears Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
         #controls { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; }
         button { padding: 15px 30px; cursor: pointer; background: #00d4ff; color: #000; border: none; border-radius: 30px; font-weight: bold; font-size: 1.2em; box-shadow: 0 0 20px rgba(0,212,255,0.5); }
-        #status { color: #00ff00; margin-top: 10px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
-        .hint { color: #aaa; font-size: 0.8em; margin-top: 5px; }
+        #status { color: #00ffcc; margin-top: 10px; font-size: 0.9em; text-transform: uppercase; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <h1>Kurupey Orbit</h1>
-    <div id="status">Ready to Launch</div>
-    <div class="hint">Fist: Spinning Planet | Open: Nebula | Peace: Secret Message</div>
+    <h1>Cosmic Kurupey</h1>
+    <div id="status">Ready for Gesture</div>
 </div>
 
 <div id="controls">
-    <button id="startButton">INITIALIZE SYSTEM</button>
+    <button id="startButton">START EXPERIENCE</button>
 </div>
 
 <video id="input_video" style="display:none" playsinline></video>
@@ -31,11 +29,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-    const PARTICLE_COUNT = 8000; // Increased density for a better sphere
+    const PARTICLE_COUNT = 10000;
     let mode = 'scatter'; 
-    let rotationSpeed = 0.002;
+    let pulse = 1.0;
     
-    // --- Three.js Setup ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -43,153 +40,154 @@
     document.body.appendChild(renderer.domElement);
     camera.position.z = 25;
 
-    // --- Particle Logic ---
+    // Particle Attributes
     const geometry = new THREE.BufferGeometry();
-    const currentPos = new Float32Array(PARTICLE_COUNT * 3);
-    const targetPos = new Float32Array(PARTICLE_COUNT * 3);
-    const targetCols = new Float32Array(PARTICLE_COUNT * 3);
-    const currentCols = new Float32Array(PARTICLE_COUNT * 3);
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const targets = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    const velocities = new Float32Array(PARTICLE_COUNT); // For falling tears
 
     for(let i=0; i<PARTICLE_COUNT; i++) {
-        currentPos[i*3] = (Math.random() - 0.5) * 50;
-        currentPos[i*3+1] = (Math.random() - 0.5) * 50;
-        currentPos[i*3+2] = (Math.random() - 0.5) * 50;
-        
-        targetPos[i*3] = currentPos[i*3];
-        targetPos[i*3+1] = currentPos[i*3+1];
-        targetPos[i*3+2] = currentPos[i*3+2];
-
-        // Default Nebula Colors
-        currentCols[i*3] = 0.2; currentCols[i*3+1] = 0.4; currentCols[i*3+2] = 1.0;
+        positions[i*3] = (Math.random() - 0.5) * 50;
+        positions[i*3+1] = (Math.random() - 0.5) * 50;
+        positions[i*3+2] = (Math.random() - 0.5) * 50;
+        colors[i*3] = 1; colors[i*3+1] = 1; colors[i*3+2] = 1;
     }
 
-    geometry.setAttribute('position', new THREE.BufferAttribute(currentPos, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(currentCols, 3));
-    
-    const material = new THREE.PointsMaterial({ 
-        size: 0.07, 
-        vertexColors: true, 
-        transparent: true, 
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending 
-    });
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const material = new THREE.PointsMaterial({ size: 0.1, vertexColors: true, blending: THREE.AdditiveBlending });
     const points = new THREE.Points(geometry, material);
     scene.add(points);
 
-    // --- Morphing Functions ---
-    function setPlanetSphere() {
-        rotationSpeed = 0.02; // Spin faster
-        for(let i=0; i<PARTICLE_COUNT; i++) {
-            const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
-            const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-            targetPos[i*3] = 10 * Math.cos(theta) * Math.sin(phi);
-            targetPos[i*3+1] = 10 * Math.sin(theta) * Math.sin(phi);
-            targetPos[i*3+2] = 10 * Math.cos(phi);
-
-            // Planetary Gradient (Green and Blue)
-            targetCols[i*3] = Math.random() > 0.5 ? 0.1 : 0.2; // R
-            targetCols[i*3+1] = Math.random() > 0.5 ? 0.8 : 0.3; // G
-            targetCols[i*3+2] = Math.random() > 0.5 ? 0.4 : 0.9; // B
-        }
-    }
-
-    function setScatter() {
-        rotationSpeed = 0.002;
-        for(let i=0; i<PARTICLE_COUNT; i++) {
-            targetPos[i*3] = (Math.random() - 0.5) * 40;
-            targetPos[i*3+1] = (Math.random() - 0.5) * 40;
-            targetPos[i*3+2] = (Math.random() - 0.5) * 40;
+    // --- Shape Logic ---
+    function setStar() {
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            const angle = (i / PARTICLE_COUNT) * Math.PI * 2;
+            const r = (i % 2 === 0) ? 12 : 5; // Outer vs Inner points
+            const pointAngle = Math.floor(i / (PARTICLE_COUNT/5)) * (Math.PI * 2 / 5);
+            const lerpAngle = (i / (PARTICLE_COUNT/5)) * (Math.PI * 2 / 5);
             
-            targetCols[i*3] = 0.5; targetCols[i*3+1] = 0.7; targetCols[i*3+2] = 1.0;
+            targets[i*3] = Math.cos(lerpAngle) * r;
+            targets[i*3+1] = Math.sin(lerpAngle) * r;
+            targets[i*3+2] = (Math.random() - 0.5) * 3;
+            colors[i*3] = 1; colors[i*3+1] = 0.8; colors[i*3+2] = 0; // Gold
         }
     }
 
-    function setMessage() {
-        rotationSpeed = 0.001;
+    function createTextWithTears(text1, text2, isCrying) {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 800; canvas.height = 200;
+        canvas.width = 1200; canvas.height = 400;
         ctx.fillStyle = 'white';
-        ctx.font = 'bold 60px Arial';
+        ctx.font = 'bold 80px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('I LOVE YOU', 400, 70);
-        ctx.fillText('KURUPEY', 400, 150);
+        ctx.fillText(text1, 450, 150);
+        ctx.fillText(text2, 450, 250);
         
-        const imgData = ctx.getImageData(0, 0, 800, 200).data;
+        if(isCrying) {
+            ctx.beginPath(); ctx.arc(950, 200, 60, 0, Math.PI * 2); // Face outline
+            ctx.stroke();
+            ctx.fillText(":", 950, 180); // Eyes
+            ctx.beginPath(); ctx.arc(950, 250, 30, Math.PI, 0); // Sad mouth
+            ctx.stroke();
+        }
+
+        const data = ctx.getImageData(0,0,1200,400).data;
         const pts = [];
-        for(let y=0; y<200; y+=3) {
-            for(let x=0; x<800; x+=3) {
-                if(imgData[(y*800+x)*4] > 128) pts.push({x: (x-400)*0.07, y: (100-y)*0.07});
+        for(let y=0; y<400; y+=4) {
+            for(let x=0; x<1200; x+=4) {
+                if(data[(y*1200+x)*4] > 128) pts.push({x: (x-600)*0.06, y: (200-y)*0.06, isEye: (x > 900 && y < 200)});
             }
         }
+
         for(let i=0; i<PARTICLE_COUNT; i++) {
             const p = pts[i % pts.length];
-            targetPos[i*3] = p.x;
-            targetPos[i*3+1] = p.y;
-            targetPos[i*3+2] = (Math.random() - 0.5) * 2;
+            targets[i*3] = p.x;
+            targets[i*3+1] = p.y;
+            targets[i*3+2] = (Math.random()-0.5)*2;
             
-            targetCols[i*3] = 1.0; targetCols[i*3+1] = 0.2; targetCols[i*3+2] = 0.6; // Magenta
+            // Assign tear behavior to a small subset of eye particles
+            if(p.isEye && i % 20 === 0) velocities[i] = Math.random() * 0.1 + 0.05;
+            else velocities[i] = 0;
+
+            if(isCrying) { colors[i*3]=0.4; colors[i*3+1]=0.7; colors[i*3+2]=1; }
+            else { colors[i*3]=1; colors[i*3+1]=0.2; colors[i*3+2]=0.5; }
         }
     }
 
-    // --- Hand Tracking ---
+    // --- MediaPipe ---
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8 });
 
     hands.onResults((results) => {
-        document.getElementById('status').innerText = "Tracking Hand...";
         if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
             const lm = results.multiHandLandmarks[0];
-            const isIndexUp = lm[8].y < lm[6].y;
-            const isMiddleUp = lm[12].y < lm[10].y;
-            const isRingDown = lm[16].y > lm[14].y;
+            const fingerCount = [8, 12, 16, 20].filter(id => lm[id].y < lm[id-2].y).length;
 
-            if (isIndexUp && isMiddleUp && isRingDown) {
-                if(mode !== 'text') { mode = 'text'; setMessage(); }
-            } else if (lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[4].x > lm[2].x) {
-                // Fist detection
-                if(mode !== 'planet') { mode = 'planet'; setPlanetSphere(); }
+            if (fingerCount === 2) {
+                if(mode !== 'love') { mode = 'love'; createTextWithTears("I LOVE YOU", "KURUPEY", false); }
+            } else if (fingerCount === 3) {
+                if(mode !== 'star') { mode = 'star'; setStar(); }
+            } else if (fingerCount === 4) {
+                if(mode !== 'miss') { mode = 'miss'; createTextWithTears("MISS YOU", "PONAH", true); }
+            } else if (lm[8].y > lm[5].y && lm[12].y > lm[9].y) {
+                mode = 'planet'; // Fist
             } else {
-                if(mode !== 'scatter') { mode = 'scatter'; setScatter(); }
+                mode = 'scatter';
             }
         }
     });
 
-    // --- Controller ---
-    document.getElementById('startButton').addEventListener('click', () => {
-        const videoElement = document.getElementById('input_video');
-        const cam = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 640, height: 480
-        });
-        cam.start();
-        document.getElementById('controls').style.display = 'none';
-    });
-
+    // --- Loop ---
     function animate() {
         requestAnimationFrame(animate);
         const pos = geometry.attributes.position.array;
         const col = geometry.attributes.color.array;
-        
-        for(let i=0; i<PARTICLE_COUNT*3; i++) {
-            pos[i] += (targetPos[i] - pos[i]) * 0.08;
-            col[i] += (targetCols[i] - col[i]) * 0.05; // Smooth color transition
+        const time = Date.now() * 0.005;
+        pulse = (mode === 'love' || mode === 'miss') ? 1.0 + Math.sin(time) * 0.1 : 1.0;
+
+        for(let i=0; i<PARTICLE_COUNT; i++) {
+            const i3 = i * 3;
+            
+            // Handle Tears for 'Miss You' mode
+            if(mode === 'miss' && velocities[i] > 0) {
+                pos[i3+1] -= velocities[i]; // Fall down
+                if(pos[i3+1] < -15) { // Reset tear to eye position
+                    pos[i3] = targets[i3] * pulse;
+                    pos[i3+1] = targets[i3+1] * pulse;
+                }
+            } else {
+                // Normal Morphing
+                pos[i3] += (targets[i3] * pulse - pos[i3]) * 0.1;
+                pos[i3+1] += (targets[i3+1] * pulse - pos[i3+1]) * 0.1;
+                pos[i3+2] += (targets[i3+2] - pos[i3+2]) * 0.1;
+            }
+            
+            col[i3] += (colors[i3] - col[i3]) * 0.05;
+            col[i3+1] += (colors[i3+1] - col[i3+1]) * 0.05;
+            col[i3+2] += (colors[i3+2] - col[i3+2]) * 0.05;
         }
-        
+
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.color.needsUpdate = true;
         
-        // Dynamic Rotation
-        points.rotation.y += rotationSpeed;
-        
+        if(mode === 'star' || mode === 'planet') points.rotation.y += 0.02;
+        else points.rotation.y *= 0.9;
+
         renderer.render(scene, camera);
     }
     animate();
 
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    // Start Button
+    document.getElementById('startButton').addEventListener('click', () => {
+        const cam = new Camera(document.getElementById('input_video'), {
+            onFrame: async () => { await hands.send({image: document.getElementById('input_video')}); },
+            width: 640, height: 480
+        });
+        cam.start();
+        document.getElementById('controls').style.display = 'none';
+        document.getElementById('status').innerText = "Camera Live";
     });
 </script>
 </body>
