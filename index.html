@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Tracking Particle Morph</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #canvas-container { position: relative; width: 100vw; height: 100vh; }
+        #video-container { position: absolute; bottom: 10px; right: 10px; width: 200px; border: 2px solid #444; border-radius: 8px; transform: scaleX(-1); }
+        #ui { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; text-shadow: 2px 2px 4px #000; }
+        .hint { font-size: 0.8em; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h2>AI Particle Controller</h2>
+    <div id="status">Loading MediaPipe...</div>
+    <p class="hint">Open Palm: Expand | Fist: Contract | Point Index: Change Shape</p>
+</div>
+<video id="input_video" style="display:none"></video>
+<canvas id="video-container"></canvas>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// --- Configuration ---
+const PARTICLE_COUNT = 5000;
+let currentTemplate = 0;
+let transitionProgress = 0;
+
+// --- Three.js Setup ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+camera.position.z = 5;
+
+// --- Particle System ---
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(PARTICLE_COUNT * 3);
+const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+const colors = new Float32Array(PARTICLE_COUNT * 3);
+
+for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+    positions[i] = (Math.random() - 0.5) * 10;
+    targetPositions[i] = positions[i];
+    colors[i] = Math.random();
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+const material = new THREE.PointsMaterial({
+    size: 0.05,
+    vertexColors: true,
+    transparent: true,
+    blending: THREE.AdditiveBlending
+});
+
+const particleSystem = new THREE.Points(geometry, material);
+scene.add(particleSystem);
+
+// --- Shape Generators ---
+function setHeart() {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const t = Math.random() * Math.PI * 2;
+        const x = 16 * Math.sin(t) ** 3;
+        const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        targetPositions[i * 3] = x * 0.1;
+        targetPositions[i * 3 + 1] = y * 0.1;
+        targetPositions[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+    }
+}
+
+function setSaturn() {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        if (i < PARTICLE_COUNT * 0.4) { // Planet
+            const phi = Math.acos(-1 + (2 * i) / (PARTICLE_COUNT * 0.4));
+            const theta = Math.sqrt(PARTICLE_COUNT * 0.4 * Math.PI) * phi;
+            targetPositions[i * 3] = Math.cos(theta) * Math.sin(phi) * 1.5;
+            targetPositions[i * 3 + 1] = Math.sin(theta) * Math.sin(phi) * 1.5;
+            targetPositions[i * 3 + 2] = Math.cos(phi) * 1.5;
+        } else { // Rings
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 2.2 + Math.random() * 1.2;
+            targetPositions[i * 3] = Math.cos(angle) * radius;
+            targetPositions[i * 3 + 1] = Math.sin(angle) * radius * 0.2;
+            targetPositions[i * 3 + 2] = Math.sin(angle) * radius;
+        }
+    }
+}
+
+function setFlower() {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const t = (i / PARTICLE_COUNT) * Math.PI * 20;
+        const r = 2 * Math.cos(5/2 * t);
+        targetPositions[i * 3] = r * Math.cos(t);
+        targetPositions[i * 3 + 1] = r * Math.sin(t);
+        targetPositions[i * 3 + 2] = (Math.random() - 0.5);
+    }
+}
+
+const templates = [setHeart, setSaturn, setFlower];
+templates[0]();
+
+// --- MediaPipe Hand Tracking ---
+import { Hands } from "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js";
+import { Camera } from "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js";
+
+const videoElement = document.getElementById('input_video');
+const statusText = document.getElementById('status');
+let handX = 0, handY = 0, handZ = 0;
+let isFist = false;
+let isPointing = false;
+
+const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+
+hands.onResults((results) => {
+    statusText.innerText = "Tracking Active";
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        
+        // Track Palm Center
+        handX = (landmarks[9].x - 0.5) * 10;
+        handY = -(landmarks[9].y - 0.5) * 10;
+        
+        // Gesture Detection
+        const thumbTip = landmarks[4].y;
+        const pinkyTip = landmarks[20].y;
+        const indexTip = landmarks[8].y;
+        const indexPip = landmarks[6].y;
+        
+        isFist = (pinkyTip < landmarks[17].y);
+        
+        // Switch shape if index is up and others are down
+        if (indexTip < indexPip && pinkyTip > landmarks[17].y && !isPointing) {
+            isPointing = true;
+            currentTemplate = (currentTemplate + 1) % templates.length;
+            templates[currentTemplate]();
+        } else if (indexTip > indexPip) {
+            isPointing = false;
+        }
+    }
+});
+
+const mediaCamera = new Camera(videoElement, {
+    onFrame: async () => { await hands.send({image: videoElement}); },
+    width: 640, height: 480
+});
+mediaCamera.start();
+
+// --- Animation Loop ---
+function animate() {
+    requestAnimationFrame(animate);
+
+    const posAttr = geometry.attributes.position;
+    const colAttr = geometry.attributes.color;
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
+
+        // Smoothly move towards target template
+        posAttr.array[ix] += (targetPositions[ix] - posAttr.array[ix]) * 0.05;
+        posAttr.array[iy] += (targetPositions[iy] - posAttr.array[iy]) * 0.05;
+        posAttr.array[iz] += (targetPositions[iz] - posAttr.array[iz]) * 0.05;
+
+        // Interaction: Move towards hand
+        const dx = handX - posAttr.array[ix];
+        const dy = handY - posAttr.array[iy];
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (isFist) {
+            // Contract/Suck in
+            posAttr.array[ix] += dx * 0.02;
+            posAttr.array[iy] += dy * 0.02;
+            colAttr.array[ix] = 1.0; // Red shift
+        } else {
+            // Subtle float
+            posAttr.array[ix] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+            colAttr.array[ix] = 0.2 + (dist * 0.1); // Dynamic color
+        }
+    }
+
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+    particleSystem.rotation.y += 0.005;
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+// Handle Resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
