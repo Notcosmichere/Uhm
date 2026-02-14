@@ -2,204 +2,186 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Kurupey Magic - Debug Edition</title>
+    <title>Kurupey Magic - Fail Safe</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
-        #controls { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; }
-        button { padding: 20px 40px; cursor: pointer; background: #00ffcc; color: #000; border: none; border-radius: 10px; font-weight: bold; font-size: 1.5em; }
+        #ui-layer { position: absolute; top: 20px; left: 20px; color: white; z-index: 100; pointer-events: none; }
+        #status-bar { color: #00ffcc; font-family: monospace; background: rgba(0,0,0,0.5); padding: 5px; }
         
-        /* Webcam Overlay */
-        #debug-container { position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px; border: 2px solid #444; border-radius: 10px; overflow: hidden; background: #111; z-index: 30; transform: scaleX(-1); }
-        #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        #gesture-label { position: absolute; bottom: 210px; right: 20px; color: #00ffcc; font-weight: bold; font-size: 1.2em; z-index: 31; text-align: right; text-shadow: 2px 2px 4px #000; }
+        /* The Camera View */
+        #debug-box { 
+            position: absolute; bottom: 20px; right: 20px; 
+            width: 320px; height: 240px; 
+            border: 2px solid #00ffcc; border-radius: 8px; 
+            overflow: hidden; z-index: 200;
+            background: #111;
+        }
+        #input_video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #sketch_canvas { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            transform: scaleX(-1); /* Mirror to match video */
+        }
+        
+        #btn-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 300; }
+        button { padding: 20px 50px; font-size: 1.5rem; cursor: pointer; background: #00ffcc; border: none; border-radius: 50px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <h1>Kurupey Cosmic</h1>
-    <p>Center your hand in the webcam view below</p>
+<div id="ui-layer">
+    <h1>Kurupey Cosmic Engine</h1>
+    <div id="status-bar">STATUS: SYSTEM READY</div>
+    <p>1. Click Start | 2. Allow Camera | 3. Show Hand</p>
 </div>
 
-<div id="gesture-label">WAITING...</div>
-
-<div id="controls">
-    <button id="startButton">AWAKEN MAGIC</button>
+<div id="btn-container">
+    <button id="startBtn">START MAGIC</button>
 </div>
 
-<div id="debug-container">
-    <video id="input_video" style="display:block; width: 100%; height: 100%; object-fit: cover;" playsinline></video>
-    <canvas id="output_canvas"></canvas>
+<div id="debug-box">
+    <video id="input_video" playsinline></video>
+    <canvas id="sketch_canvas"></canvas>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-    const PARTICLE_COUNT = 9000;
-    let mode = 'scatter'; 
-    const label = document.getElementById('gesture-label');
-    
-    // --- Three.js Setup ---
+    const status = document.getElementById('status-bar');
+    const PARTICLE_COUNT = 8000;
+    let mode = 'scatter';
+
+    // --- 1. THREE.JS SCENE ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    camera.position.z = 50;
+    camera.position.z = 40;
 
     const geometry = new THREE.BufferGeometry();
     const pos = new Float32Array(PARTICLE_COUNT * 3);
     const tar = new Float32Array(PARTICLE_COUNT * 3);
     const col = new Float32Array(PARTICLE_COUNT * 3);
 
-    function resetToScatter() {
-        label.innerText = "MODE: SCATTER (NEBULA)";
-        for(let i=0; i<PARTICLE_COUNT; i++) {
-            tar[i*3] = (Math.random() - 0.5) * 90;
-            tar[i*3+1] = (Math.random() - 0.5) * 70;
-            tar[i*3+2] = (Math.random() - 0.5) * 50;
-            col[i*3] = 0.4; col[i*3+1] = 0.5; col[i*3+2] = 1.0;
-        }
+    for(let i=0; i<PARTICLE_COUNT; i++) {
+        tar[i*3] = (Math.random()-0.5)*100;
+        tar[i*3+1] = (Math.random()-0.5)*80;
+        tar[i*3+2] = (Math.random()-0.5)*40;
+        col[i*3]=0.4; col[i*3+1]=0.4; col[i*3+2]=1; 
     }
-    resetToScatter();
 
     geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.25, vertexColors: true, blending: THREE.AdditiveBlending }));
     scene.add(points);
 
-    // --- Template Functions ---
-    function setSphere() {
-        label.innerText = "MODE: PLANET (FIST)";
-        for(let i=0; i<PARTICLE_COUNT; i++) {
-            const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
-            const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-            tar[i*3] = 18 * Math.cos(theta) * Math.sin(phi);
-            tar[i*3+1] = 18 * Math.sin(theta) * Math.sin(phi);
-            tar[i*3+2] = 18 * Math.cos(phi);
-            col[i*3]=0.1; col[i*3+1]=1; col[i*3+2]=0.6;
-        }
-    }
-
-    function setStar() {
-        label.innerText = "MODE: STAR (3 FINGERS)";
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            const angle = (i / PARTICLE_COUNT) * (Math.PI * 2);
-            const r = (i % 2 === 0) ? 25 : 10;
-            const sa = Math.floor(i / (PARTICLE_COUNT/10)) * (Math.PI/5);
-            tar[i*3] = Math.cos(sa - Math.PI/2) * r;
-            tar[i*3+1] = Math.sin(sa - Math.PI/2) * r;
-            tar[i*3+2] = (Math.random()-0.5)*5;
-            col[i*3]=1; col[i*3+1]=0.8; col[i*3+2]=0;
-        }
-    }
-
-    function setText(t1, t2, isCrying) {
-        label.innerText = isCrying ? "MODE: MISS YOU (4 FINGERS)" : "MODE: I LOVE YOU (2 FINGERS)";
-        const c = document.createElement('canvas');
-        const x = c.getContext('2d');
-        c.width = 1000; c.height = 400;
-        x.fillStyle = 'white';
-        x.font = 'bold 90px Arial';
-        x.textAlign = 'center';
-        x.fillText(t1, 500, 150);
-        x.fillText(t2, 500, 250);
-        if(isCrying) x.fillText(":(", 850, 205);
-
-        const d = x.getImageData(0,0,1000,400).data;
-        const pts = [];
-        for(let row=0; row<400; row+=5) {
-            for(let col=0; col<1000; col+=5) {
-                if(d[(row*1000+col)*4] > 128) pts.push({x: (col-500)*0.12, y: (200-row)*0.12});
+    // --- 2. SHAPE LOGIC ---
+    function updateTargets(shape) {
+        if(shape === 'sphere') {
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+                const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+                tar[i*3] = 15 * Math.cos(theta) * Math.sin(phi);
+                tar[i*3+1] = 15 * Math.sin(theta) * Math.sin(phi);
+                tar[i*3+2] = 15 * Math.cos(phi);
+                col[i*3]=0; col[i*3+1]=1; col[i*3+2]=0.5;
+            }
+        } else if (shape === 'star') {
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const angle = (i / PARTICLE_COUNT) * (Math.PI * 2);
+                const r = (i % 2 === 0) ? 22 : 8;
+                const sa = Math.floor(i / (PARTICLE_COUNT/10)) * (Math.PI/5);
+                tar[i*3] = Math.cos(sa - Math.PI/2) * r;
+                tar[i*3+1] = Math.sin(sa - Math.PI/2) * r;
+                tar[i*3+2] = 0;
+                col[i*3]=1; col[i*3+1]=0.8; col[i*3+2]=0;
+            }
+        } else if (shape === 'scatter') {
+            for(let i=0; i<PARTICLE_COUNT; i++) {
+                tar[i*3] = (Math.random()-0.5)*80;
+                tar[i*3+1] = (Math.random()-0.5)*60;
+                tar[i*3+2] = (Math.random()-0.5)*40;
+                col[i*3]=0.4; col[i*3+1]=0.4; col[i*3+2]=1;
             }
         }
-        for(let i=0; i<PARTICLE_COUNT; i++) {
-            const p = pts[i % pts.length];
-            tar[i*3] = p.x; tar[i*3+1] = p.y; tar[i*3+2] = (Math.random()-0.5)*2;
-            if(isCrying) { col[i*3]=0.3; col[i*3+1]=0.6; col[i*3+2]=1; }
-            else { col[i*3]=1; col[i*3+1]=0.1; col[i*3+2]=0.5; }
-        }
     }
 
-    // --- Tracking with Visual Debug ---
+    // --- 3. MEDIAPIPE TRACKING ---
     const videoElement = document.getElementById('input_video');
-    const canvasElement = document.getElementById('output_canvas');
+    const canvasElement = document.getElementById('sketch_canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
-    const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-    hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
 
-    hands.onResults((res) => {
-        // Draw Debug View
+    hands.onResults((results) => {
+        // Clear and resize canvas
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        if (res.multiHandLandmarks) {
-            for (const landmarks of res.multiHandLandmarks) {
-                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FFCC', lineWidth: 5});
-                drawLandmarks(canvasCtx, landmarks, {color: '#FF0055', lineWidth: 2});
-                
-                // Logic
-                const lm = landmarks;
-                const up = [8, 12, 16, 20].filter(id => lm[id].y < lm[id-2].y).length;
-                const isFist = lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[16].y > lm[13].y;
+        
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            status.innerText = "STATUS: HAND TRACKED";
+            const landmarks = results.multiHandLandmarks[0];
+            
+            // Draw skeleton
+            drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FFCC', lineWidth: 5});
+            drawLandmarks(canvasCtx, landmarks, {color: '#FF0055', lineWidth: 2});
 
-                if (isFist) { if(mode!=='sphere'){ mode='sphere'; setSphere(); } }
-                else if (up === 2) { if(mode!=='love'){ mode='love'; setText("I LOVE YOU", "KURUPEY", false); } }
-                else if (up === 3) { if(mode!=='star'){ mode='star'; setStar(); } }
-                else if (up === 4) { if(mode!=='miss'){ mode='miss'; setText("MISS YOU", "PONAH", true); } }
-                else { if(mode!=='scatter'){ mode='scatter'; resetToScatter(); } }
-            }
+            // Gesture Logic
+            const up = [8, 12, 16, 20].filter(id => landmarks[id].y < landmarks[id-2].y).length;
+            const isFist = landmarks[8].y > landmarks[5].y && landmarks[12].y > landmarks[9].y;
+
+            if (isFist) { if(mode!='sphere'){ mode='sphere'; updateTargets('sphere'); } }
+            else if (up === 3) { if(mode!='star'){ mode='star'; updateTargets('star'); } }
+            else if (up >= 1) { /* Placeholder for text modes */ }
+            else { if(mode!='scatter'){ mode='scatter'; updateTargets('scatter'); } }
         } else {
-            if(mode!=='scatter'){ mode='scatter'; resetToScatter(); }
+            status.innerText = "STATUS: SEARCHING FOR HAND...";
         }
         canvasCtx.restore();
     });
 
-    // --- Loop ---
+    // --- 4. STARTUP ---
+    document.getElementById('startBtn').addEventListener('click', () => {
+        status.innerText = "STATUS: INITIALIZING CAMERA...";
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cameraUtils.start().then(() => {
+            status.innerText = "STATUS: CAMERA ACTIVE";
+            document.getElementById('btn-container').style.display = 'none';
+        }).catch(err => {
+            status.innerText = "ERROR: CAMERA BLOCKED";
+        });
+    });
+
+    // --- 5. ANIMATION LOOP ---
     function animate() {
         requestAnimationFrame(animate);
         const pArr = geometry.attributes.position.array;
         const cArr = geometry.attributes.color.array;
-        
-        const time = Date.now() * 0.005;
-        const pPulse = (mode === 'love' || mode === 'miss') ? 1.0 + Math.sin(time)*0.1 : 1.0;
 
         for(let i=0; i<PARTICLE_COUNT*3; i++) {
-            // Main Morphing Math
-            let jitter = (mode === 'scatter') ? (Math.random() - 0.5) * 0.2 : 0; 
-            pArr[i] += (tar[i] * pPulse - pArr[i]) * 0.1 + jitter;
+            // Apply drift to scatter mode
+            let drift = (mode === 'scatter') ? (Math.random()-0.5)*0.1 : 0;
+            pArr[i] += (tar[i] - pArr[i]) * 0.1 + drift;
             cArr[i] += (col[i] - cArr[i]) * 0.1;
         }
+        
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.color.needsUpdate = true;
         
-        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.015;
-        else points.rotation.y *= 0.92;
-
+        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.01;
         renderer.render(scene, camera);
     }
-
-    document.getElementById('startButton').onclick = () => {
-        canvasElement.width = videoElement.videoWidth || 640;
-        canvasElement.height = videoElement.videoHeight || 480;
-        const cam = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 640, height: 480
-        });
-        cam.start();
-        document.getElementById('controls').style.display = 'none';
-    };
-
     animate();
-    window.onresize = () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    };
 </script>
 </body>
 </html>
