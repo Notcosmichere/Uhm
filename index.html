@@ -2,58 +2,67 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Kurupey Final Fix</title>
+    <title>Kurupey Magic - Debug Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
         #controls { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20; }
-        button { padding: 20px 40px; cursor: pointer; background: #ff0055; color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 1.5em; box-shadow: 0 0 30px rgba(255,0,85,0.4); }
-        #status { color: #00ffcc; margin-top: 10px; font-size: 0.9em; text-transform: uppercase; }
+        button { padding: 20px 40px; cursor: pointer; background: #00ffcc; color: #000; border: none; border-radius: 10px; font-weight: bold; font-size: 1.5em; }
+        
+        /* Webcam Overlay */
+        #debug-container { position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px; border: 2px solid #444; border-radius: 10px; overflow: hidden; background: #111; z-index: 30; transform: scaleX(-1); }
+        #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #gesture-label { position: absolute; bottom: 210px; right: 20px; color: #00ffcc; font-weight: bold; font-size: 1.2em; z-index: 31; text-align: right; text-shadow: 2px 2px 4px #000; }
     </style>
 </head>
 <body>
 
 <div id="ui">
     <h1>Kurupey Cosmic</h1>
-    <div id="status">Click Start to Initialize</div>
+    <p>Center your hand in the webcam view below</p>
 </div>
+
+<div id="gesture-label">WAITING...</div>
 
 <div id="controls">
-    <button id="startButton">START SYSTEM</button>
+    <button id="startButton">AWAKEN MAGIC</button>
 </div>
 
-<video id="input_video" style="display:none" playsinline></video>
+<div id="debug-container">
+    <video id="input_video" style="display:block; width: 100%; height: 100%; object-fit: cover;" playsinline></video>
+    <canvas id="output_canvas"></canvas>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
 <script>
-    const PARTICLE_COUNT = 10000;
+    const PARTICLE_COUNT = 9000;
     let mode = 'scatter'; 
-    let pulse = 1.0;
+    const label = document.getElementById('gesture-label');
     
-    // --- Scene ---
+    // --- Three.js Setup ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    camera.position.z = 50; // Pull camera back so things aren't too big
+    camera.position.z = 50;
 
-    // --- Particles ---
     const geometry = new THREE.BufferGeometry();
     const pos = new Float32Array(PARTICLE_COUNT * 3);
     const tar = new Float32Array(PARTICLE_COUNT * 3);
     const col = new Float32Array(PARTICLE_COUNT * 3);
-    const vels = new Float32Array(PARTICLE_COUNT);
 
     function resetToScatter() {
+        label.innerText = "MODE: SCATTER (NEBULA)";
         for(let i=0; i<PARTICLE_COUNT; i++) {
-            tar[i*3] = (Math.random() - 0.5) * 80;
-            tar[i*3+1] = (Math.random() - 0.5) * 60;
-            tar[i*3+2] = (Math.random() - 0.5) * 40;
-            col[i*3] = 0.5; col[i*3+1] = 0.5; col[i*3+2] = 1.0;
+            tar[i*3] = (Math.random() - 0.5) * 90;
+            tar[i*3+1] = (Math.random() - 0.5) * 70;
+            tar[i*3+2] = (Math.random() - 0.5) * 50;
+            col[i*3] = 0.4; col[i*3+1] = 0.5; col[i*3+2] = 1.0;
         }
     }
     resetToScatter();
@@ -63,74 +72,91 @@
     const points = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.25, vertexColors: true, blending: THREE.AdditiveBlending }));
     scene.add(points);
 
-    // --- Shapes ---
+    // --- Template Functions ---
     function setSphere() {
+        label.innerText = "MODE: PLANET (FIST)";
         for(let i=0; i<PARTICLE_COUNT; i++) {
             const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
             const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
-            tar[i*3] = 20 * Math.cos(theta) * Math.sin(phi);
-            tar[i*3+1] = 20 * Math.sin(theta) * Math.sin(phi);
-            tar[i*3+2] = 20 * Math.cos(phi);
-            col[i*3]=0; col[i*3+1]=1; col[i*3+2]=0.8;
+            tar[i*3] = 18 * Math.cos(theta) * Math.sin(phi);
+            tar[i*3+1] = 18 * Math.sin(theta) * Math.sin(phi);
+            tar[i*3+2] = 18 * Math.cos(phi);
+            col[i*3]=0.1; col[i*3+1]=1; col[i*3+2]=0.6;
         }
     }
 
     function setStar() {
+        label.innerText = "MODE: STAR (3 FINGERS)";
         for (let i = 0; i < PARTICLE_COUNT; i++) {
             const angle = (i / PARTICLE_COUNT) * (Math.PI * 2);
-            const rot = -Math.PI / 2;
             const r = (i % 2 === 0) ? 25 : 10;
-            // High-precision 5 point star
             const sa = Math.floor(i / (PARTICLE_COUNT/10)) * (Math.PI/5);
-            tar[i*3] = Math.cos(sa + rot) * r;
-            tar[i*3+1] = Math.sin(sa + rot) * r;
+            tar[i*3] = Math.cos(sa - Math.PI/2) * r;
+            tar[i*3+1] = Math.sin(sa - Math.PI/2) * r;
             tar[i*3+2] = (Math.random()-0.5)*5;
-            col[i*3]=1; col[i*3+1]=0.9; col[i*3+2]=0;
+            col[i*3]=1; col[i*3+1]=0.8; col[i*3+2]=0;
         }
     }
 
-    function setText(text1, text2, showEmoji) {
+    function setText(t1, t2, isCrying) {
+        label.innerText = isCrying ? "MODE: MISS YOU (4 FINGERS)" : "MODE: I LOVE YOU (2 FINGERS)";
         const c = document.createElement('canvas');
         const x = c.getContext('2d');
-        c.width = 1200; c.height = 400;
+        c.width = 1000; c.height = 400;
         x.fillStyle = 'white';
-        x.font = 'bold 100px Arial';
+        x.font = 'bold 90px Arial';
         x.textAlign = 'center';
-        x.fillText(text1, 600, 150);
-        x.fillText(text2, 600, 280);
-        if(showEmoji) x.fillText(":(", 1000, 215);
+        x.fillText(t1, 500, 150);
+        x.fillText(t2, 500, 250);
+        if(isCrying) x.fillText(":(", 850, 205);
 
-        const d = x.getImageData(0,0,1200,400).data;
+        const d = x.getImageData(0,0,1000,400).data;
         const pts = [];
-        for(let row=0; row<400; row+=4) {
-            for(let col=0; col<1200; col+=4) {
-                if(d[(row*1200+col)*4] > 128) pts.push({x: (col-600)*0.1, y: (200-row)*0.1});
+        for(let row=0; row<400; row+=5) {
+            for(let col=0; col<1000; col+=5) {
+                if(d[(row*1000+col)*4] > 128) pts.push({x: (col-500)*0.12, y: (200-row)*0.12});
             }
         }
         for(let i=0; i<PARTICLE_COUNT; i++) {
             const p = pts[i % pts.length];
             tar[i*3] = p.x; tar[i*3+1] = p.y; tar[i*3+2] = (Math.random()-0.5)*2;
-            if(showEmoji) { col[i*3]=0.2; col[i*3+1]=0.6; col[i*3+2]=1; }
+            if(isCrying) { col[i*3]=0.3; col[i*3+1]=0.6; col[i*3+2]=1; }
             else { col[i*3]=1; col[i*3+1]=0.1; col[i*3+2]=0.5; }
         }
     }
 
-    // --- Tracking ---
+    // --- Tracking with Visual Debug ---
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
     const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-    hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
+    hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
     hands.onResults((res) => {
-        if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
-            const lm = res.multiHandLandmarks[0];
-            const up = [8, 12, 16, 20].filter(id => lm[id].y < lm[id-2].y).length;
-            const isFist = lm[8].y > lm[5].y && lm[12].y > lm[9].y;
+        // Draw Debug View
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        if (res.multiHandLandmarks) {
+            for (const landmarks of res.multiHandLandmarks) {
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FFCC', lineWidth: 5});
+                drawLandmarks(canvasCtx, landmarks, {color: '#FF0055', lineWidth: 2});
+                
+                // Logic
+                const lm = landmarks;
+                const up = [8, 12, 16, 20].filter(id => lm[id].y < lm[id-2].y).length;
+                const isFist = lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[16].y > lm[13].y;
 
-            if (isFist) { if(mode!=='sphere'){ mode='sphere'; setSphere(); } }
-            else if (up === 2) { if(mode!=='love'){ mode='love'; setText("I LOVE YOU", "KURUPEY", false); } }
-            else if (up === 3) { if(mode!=='star'){ mode='star'; setStar(); } }
-            else if (up === 4) { if(mode!=='miss'){ mode='miss'; setText("MISS YOU", "PONAH", true); } }
-            else { if(mode!=='scatter'){ mode='scatter'; resetToScatter(); } }
+                if (isFist) { if(mode!=='sphere'){ mode='sphere'; setSphere(); } }
+                else if (up === 2) { if(mode!=='love'){ mode='love'; setText("I LOVE YOU", "KURUPEY", false); } }
+                else if (up === 3) { if(mode!=='star'){ mode='star'; setStar(); } }
+                else if (up === 4) { if(mode!=='miss'){ mode='miss'; setText("MISS YOU", "PONAH", true); } }
+                else { if(mode!=='scatter'){ mode='scatter'; resetToScatter(); } }
+            }
+        } else {
+            if(mode!=='scatter'){ mode='scatter'; resetToScatter(); }
         }
+        canvasCtx.restore();
     });
 
     // --- Loop ---
@@ -140,29 +166,32 @@
         const cArr = geometry.attributes.color.array;
         
         const time = Date.now() * 0.005;
-        const pFac = (mode === 'love' || mode === 'miss') ? 1.0 + Math.sin(time)*0.12 : 1.0;
+        const pPulse = (mode === 'love' || mode === 'miss') ? 1.0 + Math.sin(time)*0.1 : 1.0;
 
         for(let i=0; i<PARTICLE_COUNT*3; i++) {
-            pArr[i] += (tar[i] * pFac - pArr[i]) * 0.1;
+            // Main Morphing Math
+            let jitter = (mode === 'scatter') ? (Math.random() - 0.5) * 0.2 : 0; 
+            pArr[i] += (tar[i] * pPulse - pArr[i]) * 0.1 + jitter;
             cArr[i] += (col[i] - cArr[i]) * 0.1;
         }
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.color.needsUpdate = true;
         
-        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.01;
-        else points.rotation.y *= 0.9;
+        if(mode === 'sphere' || mode === 'star') points.rotation.y += 0.015;
+        else points.rotation.y *= 0.92;
 
         renderer.render(scene, camera);
     }
 
     document.getElementById('startButton').onclick = () => {
-        const cam = new Camera(document.getElementById('input_video'), {
-            onFrame: async () => { await hands.send({image: document.getElementById('input_video')}); },
+        canvasElement.width = videoElement.videoWidth || 640;
+        canvasElement.height = videoElement.videoHeight || 480;
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
             width: 640, height: 480
         });
         cam.start();
         document.getElementById('controls').style.display = 'none';
-        document.getElementById('status').innerText = "TRACKING ACTIVE";
     };
 
     animate();
